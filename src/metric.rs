@@ -178,3 +178,20 @@ fn test_metric_valid() {
         );
     }
 }
+
+#[test]
+fn test_metric_invalid() {
+    let invalid = vec![
+        "",
+        "metric",
+        "metric|12",
+        "metric:13|",
+        "metric:14|c@1",
+        ":|@",
+        ":1.0|c"
+    ];
+    for input in invalid.iter() {
+        let result = Metric::from_str(*input);
+        assert!(result.is_err());
+    }
+}
