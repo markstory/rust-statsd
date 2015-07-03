@@ -2,7 +2,7 @@
 ///
 use std::fmt;
 use std::str::FromStr;
-use std::cmp;
+use std::collections::HashMap;
 
 
 /// Enum of metric types
@@ -42,6 +42,12 @@ pub struct Metric {
     value: f64
 }
 
+impl Metric {
+    fn new(name: &str, value: f64, kind: MetricKind) -> Metric {
+        Metric{name: name.to_string(), value: value, kind: kind}
+    }
+}
+
 impl FromStr for Metric {
     type Err = ParseError;
 
@@ -50,6 +56,7 @@ impl FromStr for Metric {
     /// - `<str:metric_name>:<f64:value>|<str:type>`
     /// - `<str:metric_name>:<f64:value>|c|@<f64:sample_rate>`
     fn from_str(line: &str) -> Result<Metric, ParseError> {
+        // Get the metric name
         let name_parts: Vec<&str> = line.split(':').collect();
         if name_parts.len() < 2 || name_parts[0].is_empty() {
             return Err(ParseError::SyntaxError(
@@ -58,7 +65,8 @@ impl FromStr for Metric {
         }
         let name = name_parts[0].to_string();
 
-        let val_parts: Vec<&str>= name_parts[1].split('|').collect();
+        // Get the float val
+        let val_parts: Vec<&str> = name_parts[1].split('|').collect();
         if val_parts.len() < 2 || val_parts[0].is_empty() {
             return Err(ParseError::SyntaxError(
                     "Metrics require a value.",
@@ -66,61 +74,25 @@ impl FromStr for Metric {
         }
         let value = val_parts[0].parse::<f64>().ok().unwrap();
 
-
-        Ok(Metric{name: name, value: value, kind: MetricKind::Timer})
-        /*
-        let name = match line.find(':') {
-            // We don't want to allow blank key names.
-            Some(pos) if pos != 0 => {
-                idx += pos + 1;
-                line.slice_chars(0, pos).to_owned()
-            },
-
-            _ => return Err(ParseError::SyntaxError(
-                    "Metrics require a name",
-                    idx))
-        };
-
-        // Try to parse `<f64>|`, return None if no match is found.
-        let value_opt = line.slice_chars(idx, end).find('|').and_then(|loc| {
-            let number = line.slice_chars(idx, idx + loc).parse::<f64>();
-
-            idx = loc + 1;
-            Some(number.ok())
-        });
-
-        let value = match value_opt {
-            Some(v) => v.unwrap(),
-            None => return Err(ParseError::SyntaxError(
-                        "Metrics require a value",
-                        idx))
-        };
-
-        let end_idx = cmp::min(idx + 3, end);
-
-        let kind = match line.slice_chars(idx, end_idx) {
-            "c" => MetricKind::Counter(1.0),
+        // Get kind parts
+        let kind = match val_parts[1] {
             "ms" => MetricKind::Timer,
-            "h" => MetricKind::Histogram,
             "g" => MetricKind::Gauge,
-            // Sampled counter
-            /*
-            "c|@" => match line.slice_chars(end_idx, end).parse::<f64>() {
-                Ok(sample) => MetricKind::Counter(sample),
-                _ => return Err(ParseError::SyntaxError(
-                            "Counters require a sampling rate",
-                            idx))
-            },
-            */
-
-            // Unknown type
+            "h" => MetricKind::Histogram,
+            "c" => {
+                let mut rate:f64 = 1.0;
+                if val_parts.len() == 3 {
+                    rate = val_parts[2].trim_left_matches('@')
+                        .parse::<f64>().ok().unwrap();
+                }
+                MetricKind::Counter(rate)
+            }
             _ => return Err(ParseError::SyntaxError(
-                        "Unknown metric type.",
-                        idx))
+                    "Unknown metric type.",
+                    2))
         };
 
-        Ok(Metric{kind: kind, name: name, value: value})
-        */
+        Ok(Metric{name: name, value: value, kind: kind})
     }
 }
 
@@ -164,31 +136,45 @@ fn test_metric_from_str_invalid_no_value() {
 }
 
 #[test]
-fn test_metric_from_str_invalid_no_type() {
-    let res = Metric::from_str("foo:12.3");
-    assert!(res.is_err(), "Should have an error");
-    assert!(!res.is_ok(), "Should have an error");
-}
+fn test_metric_valid() {
+    let mut valid = HashMap::new();
+    valid.insert(
+        "foo.test:12.3|ms",
+        Metric::new("foo.test", 12.3, MetricKind::Timer)
+    );
+    valid.insert(
+        "test:18.123|g",
+        Metric::new("test", 18.123, MetricKind::Gauge)
+    );
+    valid.insert(
+        "test:18.123|g",
+        Metric::new("test", 18.123, MetricKind::Gauge)
+    );
+    valid.insert(
+        "foo.bar.val:18.123|h",
+        Metric::new("foo.bar.val", 18.123, MetricKind::Histogram)
+    );
+    valid.insert(
+        "thing.total:12|c",
+        Metric::new("thing.total", 12.0, MetricKind::Counter(1.0))
+    );
+    valid.insert(
+        "thing.total:5.6|c|@123",
+        Metric::new("thing.total", 5.6, MetricKind::Counter(123.0))
+    );
 
-#[test]
-fn test_metric_from_str_timer() {
-    let res = Metric::from_str("test:12|ms");
-    assert!(!res.is_err(), "Should have no error");
-    assert!(res.is_ok(), "Should have no error");
-    let metric = res.ok().unwrap();
-    assert_eq!("test", metric.name);
-    assert_eq!(12.0, metric.value);
-    // assert_eq!(MetricKind::Timer, metric.kind);
-}
+    for (input, expected) in valid.iter() {
+        let result = Metric::from_str(*input);
+        assert!(result.is_ok());
 
-#[test]
-fn test_metric_from_str_gauge() {
-}
+        let actual = result.ok().unwrap();
+        assert_eq!(expected.name, actual.name);
+        assert_eq!(expected.value, actual.value);
 
-#[test]
-fn test_metric_from_str_histogram() {
-}
-
-#[test]
-fn test_metric_from_str_counter() {
+        // TODO this is stupid, there must be a better way.
+        assert_eq!(
+            format!("{:?}", expected.kind),
+            format!("{:?}", actual.kind)
+        );
+    }
 }
