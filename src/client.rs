@@ -1,5 +1,7 @@
 use std::net::{UdpSocket, SocketAddr};
-use std::io::{Error};
+use std::io::Error;
+use std::str::FromStr;
+// use std::time::Duration;
 
 /// Client socket for statsd servers.
 ///
@@ -25,7 +27,7 @@ pub struct Client {
 impl Client {
     /// Construct a new statsd client given an host/port & prefix
     pub fn new(host: &str, prefix: &str) -> Result<Client, Error> {
-        let addr = SocketAddr.from_str(host);
+        let addr = SocketAddr::from_str(host).ok().unwrap();
         let mut socket = try!(UdpSocket::bind(addr));
         Ok(Client {socket: socket, prefix: prefix.to_string(), server_addr: addr})
     }
@@ -65,13 +67,79 @@ impl Client {
     /// # Increment by 12
     /// client.count("metric.completed", 12);
     /// ```
-    pub fn count(&mut self, metric: &str, value: usize) {
+    pub fn count(&mut self, metric: &str, value: f64) {
         let data = format!("{}.{}:{}|c", self.prefix, metric, value);
         self.send(data);
     }
 
-    /// Data goes in, data comes out.
-    fn send(&mut self, data: &str) {
-        let _ = self.socket.send_to(data.as_bytes(), self.dest);
+    /// Modify a counter by `value` only x% of the time.
+    ///
+    /// Will increment or decrement a counter by `value` with
+    /// a custom sampling rate.
+    ///
+    ///
+    /// ```ignore
+    /// # Increment by 4 50% of the time.
+    /// client.sampled_count("metric.completed", 4, 0.5);
+    /// ```
+    pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
+        /* TODO figure out how to generate random numbers properly.
+        if f64::rand() < rate {
+            return
+        }
+        let data = format!("{}.{}:{}|c", self.prefix, metric, value);
+        self.send(data);
+        */
+    }
+
+    /// Set a gauge value.
+    ///
+    /// ```ignore
+    /// # set a gauge to 9001
+    /// client.gauge("power_level.observed", 9001);
+    /// ```
+    pub fn gauge(&mut self, metric: &str, value: f64) {
+        let data = format!("{}.{}:{}|g", self.prefix, metric, value);
+        self.send(data);
+    }
+
+    /// Send a timer value.
+    ///
+    /// The value is expected to be in ms.
+    ///
+    /// ```ignore
+    /// # pass a duration value
+    /// client.timer("response.duration", 10.123);
+    /// ```
+    pub fn timer(&mut self, metric: &str, value: f64) {
+        let data = format!("{}.{}:{}|ms", self.prefix, metric, value);
+        self.send(data);
+    }
+
+    /*
+     TODO this relies on unstable API's - figure out how to disable the warnings.
+    /// Time a block of code.
+    ///
+    /// The passed closure will be timed and executed. The block's
+    /// duration will be sent as a metric.
+    ///
+    /// ```ignore
+    /// # pass a duration value
+    /// client.time("response.duration", || {
+    ///   # Your code here.
+    /// });
+    /// ```
+    pub fn time<F>(&mut self, metric: &str, callable: F) where F : Fn() {
+        let duration = {
+            Duration::span(callable)
+        };
+        let data = format!("{}.{}:{}|ms", self.prefix, metric, duration.num_seconds());
+        self.send(data);
+    }
+    */
+
+    /// Send data along the UDP socket.
+    fn send(&mut self, data: String) {
+        let _ = self.socket.send_to(data.as_bytes(), self.server_addr);
     }
 }
