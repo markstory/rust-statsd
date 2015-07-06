@@ -20,16 +20,24 @@ use std::str::FromStr;
 /// ```
 pub struct Client {
     socket: UdpSocket,
-    server_addr: SocketAddr,
+    server_address: SocketAddr,
     prefix: String
 }
 
 impl Client {
     /// Construct a new statsd client given an host/port & prefix
     pub fn new(host: &str, prefix: &str) -> Result<Client, Error> {
-        let addr = SocketAddr::from_str(host).ok().unwrap();
-        let mut socket = try!(UdpSocket::bind(addr));
-        Ok(Client {socket: socket, prefix: prefix.to_string(), server_addr: addr})
+        // Bind to a generic port as we'll only be writing on this
+        // socket.
+        let client_address = SocketAddr::from_str("0.0.0.0:0").unwrap();
+        let mut socket = try!(UdpSocket::bind(client_address));
+
+        let server_address = SocketAddr::from_str(host).ok().unwrap();
+        Ok(Client {
+            socket: socket,
+            prefix: prefix.to_string(),
+            server_address: server_address
+        })
     }
 
     /// Increment a metric by 1
@@ -140,6 +148,6 @@ impl Client {
 
     /// Send data along the UDP socket.
     fn send(&mut self, data: String) {
-        let _ = self.socket.send_to(data.as_bytes(), self.server_addr);
+        let _ = self.socket.send_to(data.as_bytes(), self.server_address);
     }
 }
