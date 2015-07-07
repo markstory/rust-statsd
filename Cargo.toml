@@ -2,3 +2,9 @@
 name = "statsd"
 version = "0.1.0"
 authors = ["Mark Story <mark@mark-story.com>"]
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE.md",
+]
