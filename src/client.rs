@@ -3,6 +3,7 @@ use std::io::Error;
 use std::str::FromStr;
 
 extern crate clock_ticks;
+extern crate rand;
 
 
 /// Client socket for statsd servers.
@@ -93,13 +94,11 @@ impl Client {
     /// client.sampled_count("metric.completed", 4, 0.5);
     /// ```
     pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
-        /* TODO figure out how to generate random numbers properly.
-        if f64::rand() < rate {
+        if rand::random::<f64>() < rate {
             return
         }
         let data = format!("{}.{}:{}|c", self.prefix, metric, value);
         self.send(data);
-        */
     }
 
     /// Set a gauge value.
