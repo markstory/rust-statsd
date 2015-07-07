@@ -1,7 +1,9 @@
 use std::net::{UdpSocket, SocketAddr};
 use std::io::Error;
 use std::str::FromStr;
-// use std::time::Duration;
+
+extern crate clock_ticks;
+
 
 /// Client socket for statsd servers.
 ///
@@ -124,8 +126,6 @@ impl Client {
         self.send(data);
     }
 
-    /*
-     TODO this relies on unstable API's - figure out how to disable the warnings.
     /// Time a block of code.
     ///
     /// The passed closure will be timed and executed. The block's
@@ -138,13 +138,12 @@ impl Client {
     /// });
     /// ```
     pub fn time<F>(&mut self, metric: &str, callable: F) where F : Fn() {
-        let duration = {
-            Duration::span(callable)
-        };
-        let data = format!("{}.{}:{}|ms", self.prefix, metric, duration.num_seconds());
+        let start = clock_ticks::precise_time_ms();
+        callable();
+        let end = clock_ticks::precise_time_ms();
+        let data = format!("{}.{}:{}|ms", self.prefix, metric, end - start);
         self.send(data);
     }
-    */
 
     /// Send data along the UDP socket.
     fn send(&mut self, data: String) {

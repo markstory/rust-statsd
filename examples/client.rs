@@ -14,4 +14,8 @@ fn main() {
 
     client.timer("timer.duration", 182.1);
     println!("Set a timer!");
+
+    client.time("closure.duration", || {
+        println!("Timing a closure");
+    });
 }

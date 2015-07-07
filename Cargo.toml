@@ -12,3 +12,6 @@ include = [
     "README.md",
     "LICENSE.md",
 ]
+
+[dependencies]
+clock_ticks = "0.0.6"
