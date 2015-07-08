@@ -1,6 +1,6 @@
 # Rust Statsd
 
-A client (and hopefully soon a server) implementation of statsd in rust.
+A Statsd client implementation in rust.
 
 ## Using the client library
 

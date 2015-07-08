@@ -9,5 +9,4 @@ will be received by the server, and there is (by design) no indication of
 this.
 */
 pub mod client;
-pub mod server;
 mod metric;
