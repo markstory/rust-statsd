@@ -33,7 +33,7 @@ impl Client {
         // Bind to a generic port as we'll only be writing on this
         // socket.
         let client_address = SocketAddr::from_str("0.0.0.0:0").unwrap();
-        let mut socket = try!(UdpSocket::bind(client_address));
+        let socket = try!(UdpSocket::bind(client_address));
 
         let server_address = SocketAddr::from_str(host).ok().unwrap();
         Ok(Client {
