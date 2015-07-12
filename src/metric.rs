@@ -2,7 +2,6 @@
 ///
 use std::fmt;
 use std::str::FromStr;
-use std::collections::HashMap;
 
 
 /// Enum of metric types
@@ -10,7 +9,6 @@ pub enum MetricKind {
     Counter(f64), // sample rate
     Gauge,
     Timer,
-    Histogram
 }
 
 impl fmt::Debug for MetricKind {
@@ -18,7 +16,6 @@ impl fmt::Debug for MetricKind {
         match *self {
             MetricKind::Gauge      => write!(f, "Gauge"),
             MetricKind::Timer      => write!(f, "Timer"),
-            MetricKind::Histogram  => write!(f, "Histogram"),
             MetricKind::Counter(s) => write!(f, "Counter(s={})", s)
         }
     }
@@ -78,7 +75,6 @@ impl FromStr for Metric {
         let kind = match val_parts[1] {
             "ms" => MetricKind::Timer,
             "g" => MetricKind::Gauge,
-            "h" => MetricKind::Histogram,
             "c" => {
                 let mut rate:f64 = 1.0;
                 if val_parts.len() == 3 {
@@ -101,97 +97,96 @@ impl FromStr for Metric {
 //
 // Tests
 //
-#[test]
-fn test_metric_kind_debug_fmt() {
-    assert_eq!(
-        "Gauge",
-        format!("{:?}", MetricKind::Gauge)
-    );
-    assert_eq!(
-        "Timer",
-        format!("{:?}", MetricKind::Timer)
-    );
-    assert_eq!(
-        "Histogram",
-        format!("{:?}", MetricKind::Histogram)
-    );
-    assert_eq!(
-        "Counter(s=6)",
-        format!("{:?}", MetricKind::Counter(6.0))
-    );
-}
+#[cfg(test)]
+mod test {
+    use metric::{Metric,MetricKind};
+    use std::str::FromStr;
+    use std::collections::HashMap;
 
-#[test]
-fn test_metric_from_str_invalid_no_name() {
-    let res = Metric::from_str("");
-    assert!(res.is_err(), "Should have an error");
-    assert!(!res.is_ok(), "Should have an error");
-}
-
-#[test]
-fn test_metric_from_str_invalid_no_value() {
-    let res = Metric::from_str("foo:");
-    assert!(res.is_err(), "Should have an error");
-    assert!(!res.is_ok(), "Should have an error");
-}
-
-#[test]
-fn test_metric_valid() {
-    let mut valid = HashMap::new();
-    valid.insert(
-        "foo.test:12.3|ms",
-        Metric::new("foo.test", 12.3, MetricKind::Timer)
-    );
-    valid.insert(
-        "test:18.123|g",
-        Metric::new("test", 18.123, MetricKind::Gauge)
-    );
-    valid.insert(
-        "test:18.123|g",
-        Metric::new("test", 18.123, MetricKind::Gauge)
-    );
-    valid.insert(
-        "foo.bar.val:18.123|h",
-        Metric::new("foo.bar.val", 18.123, MetricKind::Histogram)
-    );
-    valid.insert(
-        "thing.total:12|c",
-        Metric::new("thing.total", 12.0, MetricKind::Counter(1.0))
-    );
-    valid.insert(
-        "thing.total:5.6|c|@123",
-        Metric::new("thing.total", 5.6, MetricKind::Counter(123.0))
-    );
-
-    for (input, expected) in valid.iter() {
-        let result = Metric::from_str(*input);
-        assert!(result.is_ok());
-
-        let actual = result.ok().unwrap();
-        assert_eq!(expected.name, actual.name);
-        assert_eq!(expected.value, actual.value);
-
-        // TODO this is stupid, there must be a better way.
+    #[test]
+    fn test_metric_kind_debug_fmt() {
         assert_eq!(
-            format!("{:?}", expected.kind),
-            format!("{:?}", actual.kind)
+            "Gauge",
+            format!("{:?}", MetricKind::Gauge)
+        );
+        assert_eq!(
+            "Timer",
+            format!("{:?}", MetricKind::Timer)
+        );
+        assert_eq!(
+            "Counter(s=6)",
+            format!("{:?}", MetricKind::Counter(6.0))
         );
     }
-}
 
-#[test]
-fn test_metric_invalid() {
-    let invalid = vec![
-        "",
-        "metric",
-        "metric|12",
-        "metric:13|",
-        "metric:14|c@1",
-        ":|@",
-        ":1.0|c"
-    ];
-    for input in invalid.iter() {
-        let result = Metric::from_str(*input);
-        assert!(result.is_err());
+    #[test]
+    fn test_metric_from_str_invalid_no_name() {
+        let res = Metric::from_str("");
+        assert!(res.is_err(), "Should have an error");
+        assert!(!res.is_ok(), "Should have an error");
+    }
+
+    #[test]
+    fn test_metric_from_str_invalid_no_value() {
+        let res = Metric::from_str("foo:");
+        assert!(res.is_err(), "Should have an error");
+        assert!(!res.is_ok(), "Should have an error");
+    }
+
+    #[test]
+    fn test_metric_valid() {
+        let mut valid = HashMap::new();
+        valid.insert(
+            "foo.test:12.3|ms",
+            Metric::new("foo.test", 12.3, MetricKind::Timer)
+        );
+        valid.insert(
+            "test:18.123|g",
+            Metric::new("test", 18.123, MetricKind::Gauge)
+        );
+        valid.insert(
+            "test:18.123|g",
+            Metric::new("test", 18.123, MetricKind::Gauge)
+        );
+        valid.insert(
+            "thing.total:12|c",
+            Metric::new("thing.total", 12.0, MetricKind::Counter(1.0))
+        );
+        valid.insert(
+            "thing.total:5.6|c|@123",
+            Metric::new("thing.total", 5.6, MetricKind::Counter(123.0))
+        );
+
+        for (input, expected) in valid.iter() {
+            let result = Metric::from_str(*input);
+            assert!(result.is_ok());
+
+            let actual = result.ok().unwrap();
+            assert_eq!(expected.name, actual.name);
+            assert_eq!(expected.value, actual.value);
+
+            // TODO this is stupid, there must be a better way.
+            assert_eq!(
+                format!("{:?}", expected.kind),
+                format!("{:?}", actual.kind)
+            );
+        }
+    }
+
+    #[test]
+    fn test_metric_invalid() {
+        let invalid = vec![
+            "",
+            "metric",
+            "metric|12",
+            "metric:13|",
+            "metric:14|c@1",
+            ":|@",
+            ":1.0|c"
+        ];
+        for input in invalid.iter() {
+            let result = Metric::from_str(*input);
+            assert!(result.is_err());
+        }
     }
 }
