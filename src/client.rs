@@ -152,16 +152,26 @@ impl Client {
 
 #[cfg(test)]
 mod test {
+    extern crate rand;
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::sync_channel;
     use std::net::{UdpSocket,SocketAddr};
     use std::str::FromStr;
     use std::str;
     use std::thread;
 
-    fn make_server() -> UdpSocket {
-        let addr = SocketAddr::from_str("127.0.0.1:8125").unwrap();
+    static PORT: u16 = 8125;
+
+    fn next_test_ip4() -> String {
+        let port = PORT + rand::random::<u16>();
+        format!("127.0.0.1:{}", port).to_string()
+    }
+
+    fn make_server(host: &str) -> UdpSocket {
+        let addr = SocketAddr::from_str(host.as_ref()).unwrap();
         let server = UdpSocket::bind(addr).ok().unwrap();
+        thread::sleep_ms(1000);
         server
     }
 
@@ -184,8 +194,9 @@ mod test {
 
     #[test]
     fn test_sending_gauge() {
-        let server = make_server();
-        let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
 
         client.gauge("metric", 9.1);
 
@@ -195,8 +206,9 @@ mod test {
 
     #[test]
     fn test_sending_counter() {
-        let server = make_server();
-        let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
 
         client.incr("metric");
 
@@ -206,8 +218,9 @@ mod test {
 
     #[test]
     fn test_sending_timer() {
-        let server = make_server();
-        let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
 
         client.timer("metric", 21.39);
 
