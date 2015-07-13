@@ -149,3 +149,69 @@ impl Client {
         let _ = self.socket.send_to(data.as_bytes(), self.server_address);
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::sync::mpsc::sync_channel;
+    use std::net::{UdpSocket,SocketAddr};
+    use std::str::FromStr;
+    use std::str;
+    use std::thread;
+
+    fn make_server() -> UdpSocket {
+        let addr = SocketAddr::from_str("127.0.0.1:8125").unwrap();
+        let server = UdpSocket::bind(addr).ok().unwrap();
+        server
+    }
+
+    fn server_recv(server: UdpSocket) -> String {
+        let (serv_tx, serv_rx) = sync_channel(1);
+        let _t = thread::spawn(move || {
+            let mut buf = [0; 30];
+            let (len, _) = match server.recv_from(&mut buf) {
+                Ok(r) => r,
+                Err(_) => panic!("No response from test server."),
+            };
+            drop(server);
+            let bytes = Vec::from(&buf[0..len]);
+            serv_tx.send(bytes).unwrap();
+        });
+
+        let bytes = serv_rx.recv().ok().unwrap();
+        str::from_utf8(&bytes).unwrap().to_string()
+    }
+
+    #[test]
+    fn test_sending_gauge() {
+        let server = make_server();
+        let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+
+        client.gauge("metric", 9.1);
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:9.1|g", response);
+    }
+
+    #[test]
+    fn test_sending_counter() {
+        let server = make_server();
+        let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+
+        client.incr("metric");
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:1|c", response);
+    }
+
+    #[test]
+    fn test_sending_timer() {
+        let server = make_server();
+        let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+
+        client.timer("metric", 21.39);
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:21.39|ms", response);
+    }
+}
