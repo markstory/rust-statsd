@@ -154,24 +154,29 @@ impl Client {
 mod test {
     extern crate rand;
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::sync_channel;
     use std::net::{UdpSocket,SocketAddr};
     use std::str::FromStr;
+    use self::rand::distributions::{IndependentSample, Range};
     use std::str;
     use std::thread;
 
     static PORT: u16 = 8125;
 
+    // Generates random ports.
+    // Having random ports helps tests not collide over
+    // shared ports.
     fn next_test_ip4() -> String {
-        let port = PORT + rand::random::<u16>();
+        let range = Range::new(0, 1000);
+        let mut rng = rand::thread_rng();
+        let port = PORT + range.ind_sample(&mut rng);
         format!("127.0.0.1:{}", port).to_string()
     }
 
+    // Makes a udpsocket that acts as a statsd server.
     fn make_server(host: &str) -> UdpSocket {
         let addr = SocketAddr::from_str(host.as_ref()).unwrap();
         let server = UdpSocket::bind(addr).ok().unwrap();
-        thread::sleep_ms(1000);
         server
     }
 
@@ -205,7 +210,7 @@ mod test {
     }
 
     #[test]
-    fn test_sending_counter() {
+    fn test_sending_incr() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
         let mut client = Client::new(host.as_ref(), "myapp").unwrap();
@@ -214,6 +219,30 @@ mod test {
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:1|c", response);
+    }
+
+    #[test]
+    fn test_sending_decr() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
+
+        client.decr("metric");
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:-1|c", response);
+    }
+
+    #[test]
+    fn test_sending_count() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
+
+        client.count("metric", 12.2);
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:12.2|c", response);
     }
 
     #[test]
