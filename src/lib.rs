@@ -8,5 +8,6 @@ Due to the inherent design of the system, there is no guarantee that metrics
 will be received by the server, and there is (by design) no indication of
 this.
 */
-pub mod client;
 mod metric;
+pub mod client;
+pub use client::Client;

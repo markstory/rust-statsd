@@ -1,6 +1,6 @@
 # Rust Statsd
 
-A Statsd client implementation in rust.
+A StatsD client implementation of statsd in rust.
 
 ## Using the client library
 
@@ -18,14 +18,41 @@ You can then get a client instance and start tracking metrics:
 extern crate statsd;
 
 // Import the client object.
-use statsd::client::Client;
+use statsd::Client;
 
 // Get a client with the prefix of `myapp`. The host should be the
 // IP:port of your statsd daemon.
 let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+```
 
+## Tracking Metrics
+
+Once you've created a client, you can track timers and metrics:
+
+```rust
+// Increment a counter by 1
 client.incr("some.counter");
+
+// Decrement a counter by 1
 client.decr("some.counter");
-client.gauge("some.counter", 12.0);
-client.timer("some.counter", 13.4);
+
+// Update a gauge
+client.gauge("some.value", 12.0);
+
+// Modify a counter by an arbitrary float.
+client.count("some.counter", 511.0);
+```
+
+### Tracking Timers
+
+Timers can be updated using `timer()` and `time()`:
+
+```rust
+// Update a timer based on a calculation you've done.
+client.timer("operation.duration", 13.4);
+
+// Time a closure
+client.time("operation.duration", || {
+	// Do something expensive.
+});
 ```
