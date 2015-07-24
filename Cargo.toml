@@ -2,7 +2,7 @@
 name = "statsd"
 version = "0.3.0"
 description = "A basic statsd client for rust."
-homepage = "https://github.com/markstory/statsd-rust"
+homepage = "https://github.com/markstory/rust-statsd"
 readme = "README.md"
 license = "MIT"
 authors = ["Mark Story <mark@mark-story.com>"]
