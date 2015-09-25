@@ -6,7 +6,7 @@ A StatsD client implementation of statsd in rust.
 
 Add the `statsd` package as a dependency in your `Cargo.toml` file:
 
-```
+```toml
 [dependencies]
 statsd = "0.1.0"
 ```
