@@ -1,10 +1,29 @@
 use std::net::{UdpSocket, SocketAddr};
 use std::io::Error;
 use std::str::FromStr;
+use std::net::AddrParseError;
 
 extern crate clock_ticks;
 extern crate rand;
 
+
+#[derive(Debug)]
+pub enum StatsdError{
+    IoError(Error),
+    AddrParseError(String),
+}
+
+impl From<AddrParseError> for StatsdError {
+    fn from(_: AddrParseError) -> StatsdError {
+        StatsdError::AddrParseError("Address parsing error".to_string())
+    }
+}
+
+impl From<Error> for StatsdError {
+    fn from(err: Error) -> StatsdError {
+        StatsdError::IoError(err)
+    }
+}
 
 /// Client socket for statsd servers.
 ///
@@ -29,13 +48,13 @@ pub struct Client {
 
 impl Client {
     /// Construct a new statsd client given an host/port & prefix
-    pub fn new(host: &str, prefix: &str) -> Result<Client, Error> {
+    pub fn new(host: &str, prefix: &str) -> Result<Client, StatsdError> {
         // Bind to a generic port as we'll only be writing on this
         // socket.
-        let client_address = SocketAddr::from_str("0.0.0.0:0").unwrap();
+        let client_address = try!(SocketAddr::from_str("0.0.0.0:0"));
         let socket = try!(UdpSocket::bind(client_address));
 
-        let server_address = SocketAddr::from_str(host).ok().unwrap();
+        let server_address = try!(SocketAddr::from_str(host));
         Ok(Client {
             socket: socket,
             prefix: prefix.to_string(),
