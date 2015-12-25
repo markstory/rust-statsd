@@ -8,7 +8,7 @@ extern crate rand;
 
 
 #[derive(Debug)]
-pub enum StatsdError{
+pub enum StatsdError {
     IoError(Error),
     AddrParseError(String),
 }
@@ -43,7 +43,7 @@ impl From<Error> for StatsdError {
 pub struct Client {
     socket: UdpSocket,
     server_address: SocketAddr,
-    prefix: String
+    prefix: String,
 }
 
 impl Client {
@@ -58,7 +58,7 @@ impl Client {
         Ok(Client {
             socket: socket,
             prefix: prefix.to_string(),
-            server_address: server_address
+            server_address: server_address,
         })
     }
 
@@ -114,7 +114,7 @@ impl Client {
     /// ```
     pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
         if rand::random::<f64>() < rate {
-            return
+            return;
         }
         let data = format!("{}.{}:{}|c", self.prefix, metric, value);
         self.send(data);
@@ -155,7 +155,9 @@ impl Client {
     ///   # Your code here.
     /// });
     /// ```
-    pub fn time<F>(&mut self, metric: &str, callable: F) where F : Fn() {
+    pub fn time<F>(&mut self, metric: &str, callable: F)
+        where F: Fn()
+    {
         let start = clock_ticks::precise_time_ms();
         callable();
         let end = clock_ticks::precise_time_ms();
@@ -174,7 +176,7 @@ mod test {
     extern crate rand;
     use super::*;
     use std::sync::mpsc::sync_channel;
-    use std::net::{UdpSocket,SocketAddr};
+    use std::net::{UdpSocket, SocketAddr};
     use std::str::FromStr;
     use self::rand::distributions::{IndependentSample, Range};
     use std::str;
