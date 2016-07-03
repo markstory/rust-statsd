@@ -2,6 +2,7 @@ use std::net::{UdpSocket, SocketAddr};
 use std::io::Error;
 use std::str::FromStr;
 use std::net::AddrParseError;
+use std::collections::VecDeque;
 
 extern crate clock_ticks;
 extern crate rand;
@@ -98,7 +99,7 @@ impl Client {
     /// client.count("metric.completed", 12);
     /// ```
     pub fn count(&mut self, metric: &str, value: f64) {
-        let data = format!("{}.{}:{}|c", self.prefix, metric, value);
+        let data = self.prepare(format!("{}:{}|c", metric, value));
         self.send(data);
     }
 
@@ -116,7 +117,7 @@ impl Client {
         if rand::random::<f64>() < rate {
             return;
         }
-        let data = format!("{}.{}:{}|c", self.prefix, metric, value);
+        let data = self.prepare(format!("{}:{}|c", metric, value));
         self.send(data);
     }
 
@@ -127,7 +128,7 @@ impl Client {
     /// client.gauge("power_level.observed", 9001);
     /// ```
     pub fn gauge(&mut self, metric: &str, value: f64) {
-        let data = format!("{}.{}:{}|g", self.prefix, metric, value);
+        let data = self.prepare(format!("{}:{}|g", metric, value));
         self.send(data);
     }
 
@@ -140,7 +141,7 @@ impl Client {
     /// client.timer("response.duration", 10.123);
     /// ```
     pub fn timer(&mut self, metric: &str, value: f64) {
-        let data = format!("{}.{}:{}|ms", self.prefix, metric, value);
+        let data = self.prepare(format!("{}:{}|ms", metric, value));
         self.send(data);
     }
 
@@ -161,13 +162,174 @@ impl Client {
         let start = clock_ticks::precise_time_ms();
         callable();
         let end = clock_ticks::precise_time_ms();
-        let data = format!("{}.{}:{}|ms", self.prefix, metric, end - start);
+        let data = self.prepare(format!("{}:{}|ms", metric, end - start));
         self.send(data);
+    }
+
+    fn prepare<T: AsRef<str>>(&self, data: T) -> String {
+        format!("{}.{}", self.prefix, data.as_ref())
     }
 
     /// Send data along the UDP socket.
     fn send(&mut self, data: String) {
         let _ = self.socket.send_to(data.as_bytes(), self.server_address);
+    }
+
+    pub fn pipeline(self) -> Pipeline {
+        Pipeline::new(self)
+    }
+}
+
+pub struct Pipeline {
+    client: Client,
+    stats: VecDeque<String>,
+}
+
+impl Pipeline {
+    fn new(client: Client) -> Pipeline {
+        Pipeline {
+            client: client,
+            stats: VecDeque::new(),
+        }
+    }
+
+        /// Increment a metric by 1
+    ///
+    /// ```ignore
+    /// # Increment a given metric by 1.
+    /// pipe = client.pipeline();
+    /// pipe.incr("metric.completed");
+    /// pipe.send();
+    /// ```
+    ///
+    /// This modifies a counter with an effective sampling
+    /// rate of 1.0.
+    pub fn incr(&mut self, metric: &str) {
+        self.count(metric, 1.0);
+    }
+
+    /// Decrement a metric by -1
+    ///
+    /// ```ignore
+    /// # Decrement a given metric by 1
+    /// pipe = client.pipeline();
+    /// pipe.decr("metric.completed");
+    /// pipe.send();
+    /// ```
+    ///
+    /// This modifies a counter with an effective sampling
+    /// rate of 1.0.
+    pub fn decr(&mut self, metric: &str) {
+        self.count(metric, -1.0);
+    }
+
+    /// Modify a counter by `value`.
+    ///
+    /// Will increment or decrement a counter by `value` with
+    /// a sampling rate of 1.0.
+    ///
+    /// ```ignore
+    /// # Increment by 12
+    /// pipe = client.pipeline();
+    /// pipe.count("metric.completed", 12);
+    /// pipe.send();
+    /// ```
+    pub fn count(&mut self, metric: &str, value: f64) {
+        let data = self.client.prepare(format!("{}:{}|c", metric, value));
+        self.stats.push_back(data);
+    }
+
+    /// Modify a counter by `value` only x% of the time.
+    ///
+    /// Will increment or decrement a counter by `value` with
+    /// a custom sampling rate.
+    ///
+    ///
+    /// ```ignore
+    /// # Increment by 4 50% of the time.
+    /// pipe = client.pipeline();
+    /// pipe.sampled_count("metric.completed", 4, 0.5);
+    /// pipe.send();
+    /// ```
+    pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
+        if rand::random::<f64>() < rate {
+            return;
+        }
+        let data = self.client.prepare(format!("{}:{}|c", metric, value));
+        self.stats.push_back(data);
+    }
+
+    /// Set a gauge value.
+    ///
+    /// ```ignore
+    /// # set a gauge to 9001
+    /// pipe = client.pipeline();
+    /// pipe.gauge("power_level.observed", 9001);
+    /// pipe.send();
+    /// ```
+    pub fn gauge(&mut self, metric: &str, value: f64) {
+        let data = self.client.prepare(format!("{}:{}|g", metric, value));
+        self.stats.push_back(data);
+    }
+
+    /// Send a timer value.
+    ///
+    /// The value is expected to be in ms.
+    ///
+    /// ```ignore
+    /// # pass a duration value
+    /// pipe = client.pipeline();
+    /// pipe.timer("response.duration", 10.123);
+    /// pipe.send();
+    /// ```
+    pub fn timer(&mut self, metric: &str, value: f64) {
+        let data = self.client.prepare(format!("{}:{}|ms", metric, value));
+        self.stats.push_back(data);
+    }
+
+    /// Time a block of code.
+    ///
+    /// The passed closure will be timed and executed. The block's
+    /// duration will be sent as a metric.
+    ///
+    /// ```ignore
+    /// # pass a duration value
+    /// pipe = client.pipeline();
+    /// pipe.time("response.duration", || {
+    ///   # Your code here.
+    /// });
+    /// pipe.send();
+    /// ```
+    pub fn time<F>(&mut self, metric: &str, callable: F)
+        where F: Fn()
+    {
+        let start = clock_ticks::precise_time_ms();
+        callable();
+        let end = clock_ticks::precise_time_ms();
+        let data = self.client.prepare(format!("{}:{}|ms", metric, end - start));
+        self.stats.push_back(data);
+    }
+
+    /// Send data along the UDP socket.
+    pub fn send(&mut self) {
+        let mut _data = String::new();
+        if let Some(data) = self.stats.pop_front() {
+            _data = _data + &data;
+            while !self.stats.is_empty() {
+                let stat = self.stats.pop_front().unwrap();
+                if data.len() + stat.len() + 1 > 512 {
+                    self.client.send(_data.clone());
+                    _data.clear();
+                    _data = _data + &stat;
+                } else {
+                    _data = _data + "\n";
+                    _data = _data +&stat;
+                }
+            }
+        }
+        if !_data.is_empty() {
+            self.client.send(_data);
+        }
     }
 }
 
@@ -204,7 +366,7 @@ mod test {
     fn server_recv(server: UdpSocket) -> String {
         let (serv_tx, serv_rx) = sync_channel(1);
         let _t = thread::spawn(move || {
-            let mut buf = [0; 30];
+            let mut buf = [0; 128];
             let (len, _) = match server.recv_from(&mut buf) {
                 Ok(r) => r,
                 Err(_) => panic!("No response from test server."),
@@ -276,5 +438,32 @@ mod test {
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:21.39|ms", response);
+    }
+
+    #[test]
+    fn test_pipeline_sending_gauge() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+        pipeline.gauge("metric", 9.1);
+        pipeline.send();
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:9.1|g", response);
+    }
+
+    #[test]
+        fn test_pipeline_sending_multiple_data() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+        pipeline.gauge("metric", 9.1);
+        pipeline.count("metric", 12.2);
+        pipeline.send();
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:9.1|g\nmyapp.metric:12.2|c", response);
     }
 }
