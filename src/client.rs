@@ -183,6 +183,7 @@ impl Client {
 pub struct Pipeline {
     client: Client,
     stats: VecDeque<String>,
+    max_udp_size: usize,
 }
 
 impl Pipeline {
@@ -190,10 +191,11 @@ impl Pipeline {
         Pipeline {
             client: client,
             stats: VecDeque::new(),
+            max_udp_size: 512,
         }
     }
 
-        /// Increment a metric by 1
+    /// Increment a metric by 1
     ///
     /// ```ignore
     /// # Increment a given metric by 1.
@@ -317,7 +319,7 @@ impl Pipeline {
             _data = _data + &data;
             while !self.stats.is_empty() {
                 let stat = self.stats.pop_front().unwrap();
-                if data.len() + stat.len() + 1 > 512 {
+                if data.len() + stat.len() + 1 > self.max_udp_size {
                     self.client.send(_data.clone());
                     _data.clear();
                     _data = _data + &stat;

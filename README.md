@@ -59,7 +59,7 @@ client.time("operation.duration", || {
 
 ### Pipeline
 
-Multiple metrics can be sent to StatsD once using pipline:
+Multiple metrics can be sent to StatsD once using pipeline:
 
 ```rust
 pipe = client.pipeline():
