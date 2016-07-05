@@ -195,6 +195,17 @@ impl Pipeline {
         }
     }
 
+    /// Set max UDP packet size
+    ///
+    /// ```ignore
+    /// let mut pipe = client.pipeline();
+    /// pipe.set_max_udp_size(128);
+    /// pipe.send();
+    /// ```
+    pub fn set_max_udp_size(&mut self, max_udp_size: usize) {
+        self.max_udp_size = max_udp_size;
+    }
+
     /// Increment a metric by 1
     ///
     /// ```ignore
@@ -456,7 +467,7 @@ mod test {
     }
 
     #[test]
-        fn test_pipeline_sending_multiple_data() {
+    fn test_pipeline_sending_multiple_data() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
         let client = Client::new(host.as_ref(), "myapp").unwrap();
@@ -467,5 +478,20 @@ mod test {
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g\nmyapp.metric:12.2|c", response);
+    }
+
+    #[test]
+    fn test_pipeline_set_max_udp_size() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+        pipeline.set_max_udp_size(20);
+        pipeline.gauge("metric", 9.1);
+        pipeline.count("metric", 12.2);
+        pipeline.send();
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:9.1|g", response);
     }
 }
