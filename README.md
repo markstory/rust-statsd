@@ -56,3 +56,29 @@ client.time("operation.duration", || {
 	// Do something expensive.
 });
 ```
+
+### Pipeline
+
+Multiple metrics can be sent to StatsD once using pipeline:
+
+```rust
+let mut pipe = client.pipeline():
+
+// Increment a counter by 1
+pipe.incr("some.counter");
+
+// Decrement a counter by 1
+pipe.decr("some.counter");
+
+// Update a gauge
+pipe.gauge("some.value", 12.0);
+
+// Modify a counter by an arbitrary float.
+pipe.count("some.counter", 511.0);
+
+// Set max UDP packet size if you wish, default is 512
+pipe.set_max_udp_size(128);
+
+// Send to StatsD
+pipe.send();
+```
