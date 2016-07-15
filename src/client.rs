@@ -182,7 +182,7 @@ impl Client {
     /// let mut pipeline = client.pipeline();
     /// pipeline.incr("some.metric", 1);
     /// pipeline.incr("other.metric", 1);
-    /// pipeline.send(&client);
+    /// pipeline.send(&mut client);
     /// ```
     pub fn pipeline(&self) -> Pipeline {
         Pipeline::new()
