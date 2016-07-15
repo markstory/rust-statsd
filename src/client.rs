@@ -338,7 +338,7 @@ impl Pipeline {
     }
 
     /// Send data along the UDP socket.
-    pub fn send(&mut self, mut client: Client) {
+    pub fn send(&mut self, client: &mut Client) {
         let mut _data = String::new();
         if let Some(data) = self.stats.pop_front() {
             _data = _data + client.prepare(&data).as_ref();
@@ -471,10 +471,10 @@ mod test {
     fn test_pipeline_sending_gauge() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
-        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.gauge("metric", 9.1);
-        pipeline.send(client);
+        pipeline.send(&mut client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
@@ -484,11 +484,11 @@ mod test {
     fn test_pipeline_sending_multiple_data() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
-        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.gauge("metric", 9.1);
         pipeline.count("metric", 12.2);
-        pipeline.send(client);
+        pipeline.send(&mut client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g\nmyapp.metric:12.2|c", response);
@@ -498,14 +498,35 @@ mod test {
     fn test_pipeline_set_max_udp_size() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
-        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.set_max_udp_size(20);
         pipeline.gauge("metric", 9.1);
         pipeline.count("metric", 12.2);
-        pipeline.send(client);
+        pipeline.send(&mut client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
+    }
+
+    #[test]
+    fn test_pipeline_send_metric_after_pipeline() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+
+        pipeline.gauge("load", 9.0);
+        pipeline.count("customers", 7.0);
+        pipeline.send(&mut client);
+
+        // Should still be able to send metrics
+        // with the client.
+        client.count("customers", 6.0);
+
+        let response = server_recv(server);
+        assert_eq!(
+            "myapp.load:9|g\nmyapp.customers:7|c",
+            response);
     }
 }
