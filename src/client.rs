@@ -38,7 +38,7 @@ impl From<Error> for StatsdError {
 /// ```ignore
 /// use statsd::client::Client;
 ///
-/// let client = Client::new("127.0.0.1:8125", "myapp.");
+/// let client = Client::new("127.0.0.1:8125", "myapp");
 /// client.incr("some.metric.completed");
 /// ```
 pub struct Client {
