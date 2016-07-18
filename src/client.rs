@@ -95,8 +95,8 @@ impl Client {
     /// a sampling rate of 1.0.
     ///
     /// ```ignore
-    /// # Increment by 12
-    /// client.count("metric.completed", 12);
+    /// // Increment by 12
+    /// client.count("metric.completed", 12.0);
     /// ```
     pub fn count(&mut self, metric: &str, value: f64) {
         let data = self.prepare(format!("{}:{}|c", metric, value));
@@ -110,7 +110,7 @@ impl Client {
     ///
     ///
     /// ```ignore
-    /// # Increment by 4 50% of the time.
+    /// // Increment by 4 50% of the time.
     /// client.sampled_count("metric.completed", 4, 0.5);
     /// ```
     pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
@@ -124,8 +124,8 @@ impl Client {
     /// Set a gauge value.
     ///
     /// ```ignore
-    /// # set a gauge to 9001
-    /// client.gauge("power_level.observed", 9001);
+    /// // set a gauge to 9001
+    /// client.gauge("power_level.observed", 9001.0);
     /// ```
     pub fn gauge(&mut self, metric: &str, value: f64) {
         let data = self.prepare(format!("{}:{}|g", metric, value));
@@ -137,7 +137,7 @@ impl Client {
     /// The value is expected to be in ms.
     ///
     /// ```ignore
-    /// # pass a duration value
+    /// // pass a duration value
     /// client.timer("response.duration", 10.123);
     /// ```
     pub fn timer(&mut self, metric: &str, value: f64) {
@@ -151,9 +151,9 @@ impl Client {
     /// duration will be sent as a metric.
     ///
     /// ```ignore
-    /// # pass a duration value
+    /// // pass a duration value
     /// client.time("response.duration", || {
-    ///   # Your code here.
+    ///   // Your code here.
     /// });
     /// ```
     pub fn time<F>(&mut self, metric: &str, callable: F)
@@ -175,21 +175,28 @@ impl Client {
         let _ = self.socket.send_to(data.as_bytes(), self.server_address);
     }
 
-    pub fn pipeline(self) -> Pipeline {
-        Pipeline::new(self)
+    /// Get a pipeline struct that allows optimizes the number of UDP
+    /// packets used to send multiple metrics
+    ///
+    /// ```ignore
+    /// let mut pipeline = client.pipeline();
+    /// pipeline.incr("some.metric", 1);
+    /// pipeline.incr("other.metric", 1);
+    /// pipeline.send(&mut client);
+    /// ```
+    pub fn pipeline(&self) -> Pipeline {
+        Pipeline::new()
     }
 }
 
 pub struct Pipeline {
-    client: Client,
     stats: VecDeque<String>,
     max_udp_size: usize,
 }
 
 impl Pipeline {
-    fn new(client: Client) -> Pipeline {
+    pub fn new() -> Pipeline {
         Pipeline {
-            client: client,
             stats: VecDeque::new(),
             max_udp_size: 512,
         }
@@ -197,10 +204,11 @@ impl Pipeline {
 
     /// Set max UDP packet size
     ///
-    /// ```ignore
-    /// let mut pipe = client.pipeline();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
     /// pipe.set_max_udp_size(128);
-    /// pipe.send();
     /// ```
     pub fn set_max_udp_size(&mut self, max_udp_size: usize) {
         self.max_udp_size = max_udp_size;
@@ -208,11 +216,12 @@ impl Pipeline {
 
     /// Increment a metric by 1
     ///
-    /// ```ignore
-    /// # Increment a given metric by 1.
-    /// pipe = client.pipeline();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // Increment a given metric by 1.
     /// pipe.incr("metric.completed");
-    /// pipe.send();
     /// ```
     ///
     /// This modifies a counter with an effective sampling
@@ -223,11 +232,12 @@ impl Pipeline {
 
     /// Decrement a metric by -1
     ///
-    /// ```ignore
-    /// # Decrement a given metric by 1
-    /// pipe = client.pipeline();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // Decrement a given metric by 1
     /// pipe.decr("metric.completed");
-    /// pipe.send();
     /// ```
     ///
     /// This modifies a counter with an effective sampling
@@ -241,14 +251,15 @@ impl Pipeline {
     /// Will increment or decrement a counter by `value` with
     /// a sampling rate of 1.0.
     ///
-    /// ```ignore
-    /// # Increment by 12
-    /// pipe = client.pipeline();
-    /// pipe.count("metric.completed", 12);
-    /// pipe.send();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // Increment by 12
+    /// pipe.count("metric.completed", 12.0);
     /// ```
     pub fn count(&mut self, metric: &str, value: f64) {
-        let data = self.client.prepare(format!("{}:{}|c", metric, value));
+        let data = format!("{}:{}|c", metric, value);
         self.stats.push_back(data);
     }
 
@@ -257,31 +268,32 @@ impl Pipeline {
     /// Will increment or decrement a counter by `value` with
     /// a custom sampling rate.
     ///
+    /// ```
+    /// use statsd::client::Pipeline;
     ///
-    /// ```ignore
-    /// # Increment by 4 50% of the time.
-    /// pipe = client.pipeline();
-    /// pipe.sampled_count("metric.completed", 4, 0.5);
-    /// pipe.send();
+    /// let mut pipe = Pipeline::new();
+    /// // Increment by 4 50% of the time.
+    /// pipe.sampled_count("metric.completed", 4.0, 0.5);
     /// ```
     pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
         if rand::random::<f64>() < rate {
             return;
         }
-        let data = self.client.prepare(format!("{}:{}|c", metric, value));
+        let data = format!("{}:{}|c", metric, value);
         self.stats.push_back(data);
     }
 
     /// Set a gauge value.
     ///
-    /// ```ignore
-    /// # set a gauge to 9001
-    /// pipe = client.pipeline();
-    /// pipe.gauge("power_level.observed", 9001);
-    /// pipe.send();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // set a gauge to 9001
+    /// pipe.gauge("power_level.observed", 9001.0);
     /// ```
     pub fn gauge(&mut self, metric: &str, value: f64) {
-        let data = self.client.prepare(format!("{}:{}|g", metric, value));
+        let data = format!("{}:{}|g", metric, value);
         self.stats.push_back(data);
     }
 
@@ -289,14 +301,15 @@ impl Pipeline {
     ///
     /// The value is expected to be in ms.
     ///
-    /// ```ignore
-    /// # pass a duration value
-    /// pipe = client.pipeline();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // pass a duration value
     /// pipe.timer("response.duration", 10.123);
-    /// pipe.send();
     /// ```
     pub fn timer(&mut self, metric: &str, value: f64) {
-        let data = self.client.prepare(format!("{}:{}|ms", metric, value));
+        let data = format!("{}:{}|ms", metric, value);
         self.stats.push_back(data);
     }
 
@@ -305,13 +318,14 @@ impl Pipeline {
     /// The passed closure will be timed and executed. The block's
     /// duration will be sent as a metric.
     ///
-    /// ```ignore
-    /// # pass a duration value
-    /// pipe = client.pipeline();
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // pass a duration value
     /// pipe.time("response.duration", || {
-    ///   # Your code here.
+    ///   // Your code here.
     /// });
-    /// pipe.send();
     /// ```
     pub fn time<F>(&mut self, metric: &str, callable: F)
         where F: Fn()
@@ -319,19 +333,19 @@ impl Pipeline {
         let start = clock_ticks::precise_time_ms();
         callable();
         let end = clock_ticks::precise_time_ms();
-        let data = self.client.prepare(format!("{}:{}|ms", metric, end - start));
+        let data = format!("{}:{}|ms", metric, end - start);
         self.stats.push_back(data);
     }
 
     /// Send data along the UDP socket.
-    pub fn send(&mut self) {
+    pub fn send(&mut self, client: &mut Client) {
         let mut _data = String::new();
         if let Some(data) = self.stats.pop_front() {
-            _data = _data + &data;
+            _data = _data + client.prepare(&data).as_ref();
             while !self.stats.is_empty() {
-                let stat = self.stats.pop_front().unwrap();
+                let stat = client.prepare(self.stats.pop_front().unwrap());
                 if data.len() + stat.len() + 1 > self.max_udp_size {
-                    self.client.send(_data.clone());
+                    client.send(_data.clone());
                     _data.clear();
                     _data = _data + &stat;
                 } else {
@@ -341,7 +355,7 @@ impl Pipeline {
             }
         }
         if !_data.is_empty() {
-            self.client.send(_data);
+            client.send(_data);
         }
     }
 }
@@ -457,10 +471,10 @@ mod test {
     fn test_pipeline_sending_gauge() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
-        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.gauge("metric", 9.1);
-        pipeline.send();
+        pipeline.send(&mut client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
@@ -470,11 +484,11 @@ mod test {
     fn test_pipeline_sending_multiple_data() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
-        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.gauge("metric", 9.1);
         pipeline.count("metric", 12.2);
-        pipeline.send();
+        pipeline.send(&mut client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g\nmyapp.metric:12.2|c", response);
@@ -484,14 +498,35 @@ mod test {
     fn test_pipeline_set_max_udp_size() {
         let host = next_test_ip4();
         let server = make_server(host.as_ref());
-        let client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.set_max_udp_size(20);
         pipeline.gauge("metric", 9.1);
         pipeline.count("metric", 12.2);
-        pipeline.send();
+        pipeline.send(&mut client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
+    }
+
+    #[test]
+    fn test_pipeline_send_metric_after_pipeline() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+
+        pipeline.gauge("load", 9.0);
+        pipeline.count("customers", 7.0);
+        pipeline.send(&mut client);
+
+        // Should still be able to send metrics
+        // with the client.
+        client.count("customers", 6.0);
+
+        let response = server_recv(server);
+        assert_eq!(
+            "myapp.load:9|g\nmyapp.customers:7|c",
+            response);
     }
 }
