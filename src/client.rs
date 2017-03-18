@@ -156,14 +156,15 @@ impl Client {
     ///   // Your code here.
     /// });
     /// ```
-    pub fn time<F>(&mut self, metric: &str, callable: F)
-        where F: Fn()
+    pub fn time<F, R>(&mut self, metric: &str, callable: F) -> R
+        where F: Fn() -> R
     {
         let start = clock_ticks::precise_time_ms();
-        callable();
+        let return_val = callable();
         let end = clock_ticks::precise_time_ms();
         let data = self.prepare(format!("{}:{}|ms", metric, end - start));
         self.send(data);
+        return_val
     }
 
     fn prepare<T: AsRef<str>>(&self, data: T) -> String {
@@ -465,6 +466,22 @@ mod test {
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:21.39|ms", response);
+    }
+
+    #[test]
+    fn test_sending_timed_block() {
+        let host = next_test_ip4();
+        let server = make_server(host.as_ref());
+        let mut client = Client::new(host.as_ref(), "myapp").unwrap();
+
+        let output = client.time("metric", || {
+            "a string"
+        });
+
+        let response = server_recv(server);
+        assert_eq!(output, "a string");
+        assert!(response.contains("myapp.metric"));
+        assert!(response.contains("|ms"));
     }
 
     #[test]
