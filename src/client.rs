@@ -3,6 +3,8 @@ use std::io::Error;
 use std::str::FromStr;
 use std::net::AddrParseError;
 use std::collections::VecDeque;
+use std::fmt;
+use std::error;
 
 extern crate clock_ticks;
 extern crate rand;
@@ -23,6 +25,24 @@ impl From<AddrParseError> for StatsdError {
 impl From<Error> for StatsdError {
     fn from(err: Error) -> StatsdError {
         StatsdError::IoError(err)
+    }
+}
+
+impl fmt::Display for StatsdError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            StatsdError::IoError(ref e) => write!(f, "{}", e),
+            StatsdError::AddrParseError(ref e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl error::Error for StatsdError {
+    fn description(&self) -> &str {
+        match *self {
+            StatsdError::IoError(ref e) => e.description(),
+            StatsdError::AddrParseError(ref e) => e,
+        }
     }
 }
 
