@@ -72,10 +72,9 @@ impl Client {
     pub fn new(host: &str, prefix: &str) -> Result<Client, StatsdError> {
         // Bind to a generic port as we'll only be writing on this
         // socket.
-        let client_address = try!(SocketAddr::from_str("0.0.0.0:0"));
-        let socket = try!(UdpSocket::bind(client_address));
+        let socket = UdpSocket::bind("0.0.0.0:0")?;
 
-        let server_address = try!(SocketAddr::from_str(host));
+        let server_address = SocketAddr::from_str(host)?;
         Ok(Client {
             socket: socket,
             prefix: prefix.to_string(),
