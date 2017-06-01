@@ -8,7 +8,7 @@ Add the `statsd` package as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-statsd = "0.8.0"
+statsd = "^0.9.0"
 ```
 
 You can then get a client instance and start tracking metrics:
