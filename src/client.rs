@@ -6,9 +6,13 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::error;
 
-extern crate clock_ticks;
+extern crate time;
 extern crate rand;
 
+#[inline]
+fn precise_time_ms() -> u64 {
+  time::precise_time_ns() / 1_000_000
+}
 
 #[derive(Debug)]
 pub enum StatsdError {
@@ -178,9 +182,9 @@ impl Client {
     pub fn time<F, R>(&mut self, metric: &str, callable: F) -> R
         where F: Fn() -> R
     {
-        let start = clock_ticks::precise_time_ms();
+        let start = precise_time_ms();
         let return_val = callable();
-        let end = clock_ticks::precise_time_ms();
+        let end = precise_time_ms();
         let data = self.prepare(format!("{}:{}|ms", metric, end - start));
         self.send(data);
         return_val
@@ -350,9 +354,9 @@ impl Pipeline {
     pub fn time<F>(&mut self, metric: &str, callable: F)
         where F: Fn()
     {
-        let start = clock_ticks::precise_time_ms();
+        let start = precise_time_ms();
         callable();
-        let end = clock_ticks::precise_time_ms();
+        let end = precise_time_ms();
         let data = format!("{}:{}|ms", metric, end - start);
         self.stats.push_back(data);
     }

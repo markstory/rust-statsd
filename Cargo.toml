@@ -14,5 +14,5 @@ include = [
 ]
 
 [dependencies]
-clock_ticks = "^0.1"
+time = "^0.1"
 rand = "^0.3"
