@@ -5,14 +5,15 @@ use std::net::AddrParseError;
 use std::collections::VecDeque;
 use std::fmt;
 use std::error;
+use std::time;
 
-extern crate time;
 extern crate rand;
 
 #[inline]
-fn precise_time_ms() -> u64 {
-  time::precise_time_ns() / 1_000_000
+fn duration_in_ms(d: time::Duration) -> u32 {
+  (d.as_secs() * 1000) as u32 + d.subsec_nanos() / 1_000_000
 }
+
 
 #[derive(Debug)]
 pub enum StatsdError {
@@ -182,10 +183,11 @@ impl Client {
     pub fn time<F, R>(&mut self, metric: &str, callable: F) -> R
         where F: Fn() -> R
     {
-        let start = precise_time_ms();
+        let start = time::Instant::now();
         let return_val = callable();
-        let end = precise_time_ms();
-        let data = self.prepare(format!("{}:{}|ms", metric, end - start));
+        let used = start.elapsed();
+        let data = self.prepare(format!(
+            "{}:{}|ms", metric, duration_in_ms(used)));
         self.send(data);
         return_val
     }
@@ -354,10 +356,10 @@ impl Pipeline {
     pub fn time<F>(&mut self, metric: &str, callable: F)
         where F: Fn()
     {
-        let start = precise_time_ms();
+        let start = time::Instant::now();
         callable();
-        let end = precise_time_ms();
-        let data = format!("{}:{}|ms", metric, end - start);
+        let used = start.elapsed();
+        let data = format!("{}:{}|ms", metric, duration_in_ms(used));
         self.stats.push_back(data);
     }
 
