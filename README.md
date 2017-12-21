@@ -1,5 +1,7 @@
 # Rust Statsd
 
+[![Build Status](https://secure.travis-ci.org/markstory/rust-statsd.png?branch=master)](http://travis-ci.org/markstory/rust-statsd)
+
 A StatsD client implementation of statsd in rust.
 
 ## Using the client library
