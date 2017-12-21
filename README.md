@@ -89,3 +89,8 @@ pipe.send(&mut client);
 
 Pipelines are also helpful to make functions simpler to test, as you can
 pass a pipeline and be confident that no UDP packets will be sent.
+
+
+## License
+
+Licenesed under the [MIT License](LICENSE.txt).
