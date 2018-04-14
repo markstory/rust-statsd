@@ -1,6 +1,6 @@
 [package]
 name = "statsd"
-version = "0.10.0"
+version = "0.11.0"
 description = "A basic statsd client for rust."
 homepage = "https://github.com/markstory/rust-statsd"
 readme = "README.md"
