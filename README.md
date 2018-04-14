@@ -26,7 +26,7 @@ use statsd::Client;
 
 // Get a client with the prefix of `myapp`. The host should be the
 // IP:port of your statsd daemon.
-let mut client = Client::new("127.0.0.1:8125", "myapp").unwrap();
+let client = Client::new("127.0.0.1:8125", "myapp").unwrap();
 ```
 
 ## Tracking Metrics
@@ -84,7 +84,7 @@ pipe.count("some.counter", 511.0);
 pipe.set_max_udp_size(128);
 
 // Send to StatsD
-pipe.send(&mut client);
+pipe.send(&client);
 ```
 
 Pipelines are also helpful to make functions simpler to test, as you can
