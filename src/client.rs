@@ -96,7 +96,7 @@ impl Client {
     ///
     /// This modifies a counter with an effective sampling
     /// rate of 1.0.
-    pub fn incr(&mut self, metric: &str) {
+    pub fn incr(&self, metric: &str) {
         self.count(metric, 1.0);
     }
 
@@ -109,7 +109,7 @@ impl Client {
     ///
     /// This modifies a counter with an effective sampling
     /// rate of 1.0.
-    pub fn decr(&mut self, metric: &str) {
+    pub fn decr(&self, metric: &str) {
         self.count(metric, -1.0);
     }
 
@@ -122,7 +122,7 @@ impl Client {
     /// // Increment by 12
     /// client.count("metric.completed", 12.0);
     /// ```
-    pub fn count(&mut self, metric: &str, value: f64) {
+    pub fn count(&self, metric: &str, value: f64) {
         let data = self.prepare(format!("{}:{}|c", metric, value));
         self.send(data);
     }
@@ -137,7 +137,7 @@ impl Client {
     /// // Increment by 4 50% of the time.
     /// client.sampled_count("metric.completed", 4, 0.5);
     /// ```
-    pub fn sampled_count(&mut self, metric: &str, value: f64, rate: f64) {
+    pub fn sampled_count(&self, metric: &str, value: f64, rate: f64) {
         if rand::random::<f64>() < rate {
             return;
         }
@@ -151,7 +151,7 @@ impl Client {
     /// // set a gauge to 9001
     /// client.gauge("power_level.observed", 9001.0);
     /// ```
-    pub fn gauge(&mut self, metric: &str, value: f64) {
+    pub fn gauge(&self, metric: &str, value: f64) {
         let data = self.prepare(format!("{}:{}|g", metric, value));
         self.send(data);
     }
@@ -164,7 +164,7 @@ impl Client {
     /// // pass a duration value
     /// client.timer("response.duration", 10.123);
     /// ```
-    pub fn timer(&mut self, metric: &str, value: f64) {
+    pub fn timer(&self, metric: &str, value: f64) {
         let data = self.prepare(format!("{}:{}|ms", metric, value));
         self.send(data);
     }
@@ -180,7 +180,7 @@ impl Client {
     ///   // Your code here.
     /// });
     /// ```
-    pub fn time<F, R>(&mut self, metric: &str, callable: F) -> R
+    pub fn time<F, R>(&self, metric: &str, callable: F) -> R
         where F: Fn() -> R
     {
         let start = time::Instant::now();
@@ -197,7 +197,7 @@ impl Client {
     }
 
     /// Send data along the UDP socket.
-    fn send(&mut self, data: String) {
+    fn send(&self, data: String) {
         let _ = self.socket.send_to(data.as_bytes(), self.server_address);
     }
 
@@ -364,7 +364,7 @@ impl Pipeline {
     }
 
     /// Send data along the UDP socket.
-    pub fn send(&mut self, client: &mut Client) {
+    pub fn send(&mut self, client: &Client) {
         let mut _data = String::new();
         if let Some(data) = self.stats.pop_front() {
             _data = _data + client.prepare(&data).as_ref();
@@ -435,7 +435,7 @@ mod test {
     fn test_sending_gauge() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
 
         client.gauge("metric", 9.1);
 
@@ -447,7 +447,7 @@ mod test {
     fn test_sending_incr() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
 
         client.incr("metric");
 
@@ -459,7 +459,7 @@ mod test {
     fn test_sending_decr() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
 
         client.decr("metric");
 
@@ -471,7 +471,7 @@ mod test {
     fn test_sending_count() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
 
         client.count("metric", 12.2);
 
@@ -483,7 +483,7 @@ mod test {
     fn test_sending_timer() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
 
         client.timer("metric", 21.39);
 
@@ -495,7 +495,7 @@ mod test {
     fn test_sending_timed_block() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
 
         let output = client.time("metric", || {
             "a string"
@@ -511,10 +511,10 @@ mod test {
     fn test_pipeline_sending_gauge() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.gauge("metric", 9.1);
-        pipeline.send(&mut client);
+        pipeline.send(&client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
@@ -524,11 +524,11 @@ mod test {
     fn test_pipeline_sending_multiple_data() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.gauge("metric", 9.1);
         pipeline.count("metric", 12.2);
-        pipeline.send(&mut client);
+        pipeline.send(&client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g\nmyapp.metric:12.2|c", response);
@@ -538,12 +538,12 @@ mod test {
     fn test_pipeline_set_max_udp_size() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
         let mut pipeline = client.pipeline();
         pipeline.set_max_udp_size(20);
         pipeline.gauge("metric", 9.1);
         pipeline.count("metric", 12.2);
-        pipeline.send(&mut client);
+        pipeline.send(&client);
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
@@ -553,12 +553,12 @@ mod test {
     fn test_pipeline_send_metric_after_pipeline() {
         let host = next_test_ip4();
         let server = make_server(&host);
-        let mut client = Client::new(&host, "myapp").unwrap();
+        let client = Client::new(&host, "myapp").unwrap();
         let mut pipeline = client.pipeline();
 
         pipeline.gauge("load", 9.0);
         pipeline.count("customers", 7.0);
-        pipeline.send(&mut client);
+        pipeline.send(&client);
 
         // Should still be able to send metrics
         // with the client.
