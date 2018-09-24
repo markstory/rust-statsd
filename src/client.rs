@@ -180,8 +180,8 @@ impl Client {
     ///   // Your code here.
     /// });
     /// ```
-    pub fn time<F, R>(&self, metric: &str, callable: F) -> R
-        where F: Fn() -> R
+    pub fn time<F, R>(&self, metric: &str, mut callable: F) -> R
+        where F: FnMut() -> R
     {
         let start = time::Instant::now();
         let return_val = callable();
@@ -353,8 +353,8 @@ impl Pipeline {
     ///   // Your code here.
     /// });
     /// ```
-    pub fn time<F>(&mut self, metric: &str, callable: F)
-        where F: Fn()
+    pub fn time<F>(&mut self, metric: &str, mut callable: F)
+        where F: FnMut()
     {
         let start = time::Instant::now();
         callable();
@@ -496,15 +496,43 @@ mod test {
         let host = next_test_ip4();
         let server = make_server(&host);
         let client = Client::new(&host, "myapp").unwrap();
+        struct TimeTest {
+            num: u8,
+        };
 
-        let output = client.time("metric", || {
+        let mut t = TimeTest{num: 10};
+        let output = client.time("time_block", || {
+            t.num += 2;
             "a string"
         });
 
         let response = server_recv(server);
         assert_eq!(output, "a string");
-        assert!(response.contains("myapp.metric"));
+        assert_eq!(t.num, 12);
+        assert!(response.contains("myapp.time_block"));
         assert!(response.contains("|ms"));
+    }
+
+    #[test]
+    fn test_pipeline_sending_time_block() {
+        let host = next_test_ip4();
+        let server = make_server(&host);
+        let client = Client::new(&host, "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+        pipeline.gauge("metric", 9.1);
+        struct TimeTest {
+            num: u8,
+        };
+
+        let mut t = TimeTest{num: 10};
+        pipeline.time("time_block", || {
+            t.num += 2;
+        });
+        pipeline.send(&client);
+
+        let response = server_recv(server);
+        assert_eq!(t.num, 12);
+        assert_eq!("myapp.metric:9.1|g\nmyapp.time_block:0|ms", response);
     }
 
     #[test]
