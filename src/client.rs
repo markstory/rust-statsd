@@ -180,8 +180,8 @@ impl Client {
     ///   // Your code here.
     /// });
     /// ```
-    pub fn time<F, R>(&self, metric: &str, mut callable: F) -> R
-        where F: FnMut() -> R
+    pub fn time<F, R>(&self, metric: &str, callable: F) -> R
+        where F: FnOnce() -> R
     {
         let start = time::Instant::now();
         let return_val = callable();
@@ -353,8 +353,8 @@ impl Pipeline {
     ///   // Your code here.
     /// });
     /// ```
-    pub fn time<F>(&mut self, metric: &str, mut callable: F)
-        where F: FnMut()
+    pub fn time<F>(&mut self, metric: &str, callable: F)
+        where F: FnOnce()
     {
         let start = time::Instant::now();
         callable();
