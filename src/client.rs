@@ -74,12 +74,17 @@ pub struct Client {
 impl Client {
     /// Construct a new statsd client given an host/port & prefix
     pub fn new<T: ToSocketAddrs>(host: T, prefix: &str) -> Result<Client, StatsdError> {
-        // Bind to a generic port as we'll only be writing on this
-        // socket.
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
         let server_address = host.to_socket_addrs()?
             .next()
             .ok_or_else(|| StatsdError::AddrParseError("Address parsing error".to_string()))?;
+
+        // Bind to a generic port as we'll only be writing on this
+        // socket.
+        let socket = if server_address.is_ipv4() {
+            UdpSocket::bind("0.0.0.0:0")?
+        } else {
+            UdpSocket::bind("[::]:0")?
+        };
         Ok(Client {
             socket: socket,
             prefix: prefix.to_string(),
