@@ -198,7 +198,11 @@ impl Client {
     }
 
     fn prepare<T: AsRef<str>>(&self, data: T) -> String {
-        format!("{}.{}", self.prefix, data.as_ref())
+        if self.prefix.is_empty() {
+            data.as_ref().to_string()
+        } else {
+            format!("{}.{}", self.prefix, data.as_ref())
+        }
     }
 
     /// Send data along the UDP socket.
@@ -446,6 +450,18 @@ mod test {
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
+    }
+
+    #[test]
+    fn test_sending_gauge_without_prefix() {
+        let host = next_test_ip4();
+        let server = make_server(&host);
+        let client = Client::new(&host, "").unwrap();
+
+        client.gauge("metric", 9.1);
+
+        let response = server_recv(server);
+        assert_eq!("metric:9.1|g", response);
     }
 
     #[test]
