@@ -1,18 +1,12 @@
-use std::net::{UdpSocket, SocketAddr, ToSocketAddrs};
+use std::collections::VecDeque;
+use std::error;
+use std::fmt;
 use std::io::Error;
 use std::net::AddrParseError;
-use std::collections::VecDeque;
-use std::fmt;
-use std::error;
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::time;
 
 extern crate rand;
-
-#[inline]
-fn duration_in_ms(d: time::Duration) -> u32 {
-  (d.as_secs() * 1000) as u32 + d.subsec_nanos() / 1_000_000
-}
-
 
 #[derive(Debug)]
 pub enum StatsdError {
@@ -74,7 +68,8 @@ pub struct Client {
 impl Client {
     /// Construct a new statsd client given an host/port & prefix
     pub fn new<T: ToSocketAddrs>(host: T, prefix: &str) -> Result<Client, StatsdError> {
-        let server_address = host.to_socket_addrs()?
+        let server_address = host
+            .to_socket_addrs()?
             .next()
             .ok_or_else(|| StatsdError::AddrParseError("Address parsing error".to_string()))?;
 
@@ -86,9 +81,9 @@ impl Client {
             UdpSocket::bind("[::]:0")?
         };
         Ok(Client {
-            socket: socket,
+            socket,
             prefix: prefix.to_string(),
-            server_address: server_address,
+            server_address,
         })
     }
 
@@ -186,13 +181,13 @@ impl Client {
     /// });
     /// ```
     pub fn time<F, R>(&self, metric: &str, callable: F) -> R
-        where F: FnOnce() -> R
+    where
+        F: FnOnce() -> R,
     {
         let start = time::Instant::now();
         let return_val = callable();
         let used = start.elapsed();
-        let data = self.prepare(format!(
-            "{}:{}|ms", metric, duration_in_ms(used)));
+        let data = self.prepare(format!("{}:{}|ms", metric, used.as_millis()));
         self.send(data);
         return_val
     }
@@ -363,12 +358,13 @@ impl Pipeline {
     /// });
     /// ```
     pub fn time<F>(&mut self, metric: &str, callable: F)
-        where F: FnOnce()
+    where
+        F: FnOnce(),
     {
         let start = time::Instant::now();
         callable();
         let used = start.elapsed();
-        let data = format!("{}:{}|ms", metric, duration_in_ms(used));
+        let data = format!("{}:{}|ms", metric, used.as_millis());
         self.stats.push_back(data);
     }
 
@@ -376,16 +372,16 @@ impl Pipeline {
     pub fn send(&mut self, client: &Client) {
         let mut _data = String::new();
         if let Some(data) = self.stats.pop_front() {
-            _data = _data + client.prepare(&data).as_ref();
+            _data += client.prepare(&data).as_ref();
             while !self.stats.is_empty() {
                 let stat = client.prepare(self.stats.pop_front().unwrap());
                 if data.len() + stat.len() + 1 > self.max_udp_size {
                     client.send(_data.clone());
                     _data.clear();
-                    _data = _data + &stat;
+                    _data += &stat;
                 } else {
-                    _data = _data + "\n";
-                    _data = _data +&stat;
+                    _data += "\n";
+                    _data += &stat;
                 }
             }
         }
@@ -398,11 +394,11 @@ impl Pipeline {
 #[cfg(test)]
 mod test {
     extern crate rand;
-    use super::*;
-    use std::sync::mpsc::sync_channel;
-    use std::net::UdpSocket;
     use self::rand::distributions::{IndependentSample, Range};
+    use super::*;
+    use std::net::UdpSocket;
     use std::str;
+    use std::sync::mpsc::sync_channel;
     use std::thread;
 
     static PORT: u16 = 8125;
@@ -414,13 +410,12 @@ mod test {
         let range = Range::new(0, 1000);
         let mut rng = rand::thread_rng();
         let port = PORT + range.ind_sample(&mut rng);
-        format!("127.0.0.1:{}", port).to_string()
+        format!("127.0.0.1:{}", port)
     }
 
     // Makes a udpsocket that acts as a statsd server.
     fn make_server(host: &str) -> UdpSocket {
-        let server = UdpSocket::bind(host).ok().unwrap();
-        server
+        UdpSocket::bind(host).ok().unwrap()
     }
 
     fn server_recv(server: UdpSocket) -> String {
@@ -521,7 +516,7 @@ mod test {
             num: u8,
         };
 
-        let mut t = TimeTest{num: 10};
+        let mut t = TimeTest { num: 10 };
         let output = client.time("time_block", || {
             t.num += 2;
             "a string"
@@ -545,7 +540,7 @@ mod test {
             num: u8,
         };
 
-        let mut t = TimeTest{num: 10};
+        let mut t = TimeTest { num: 10 };
         pipeline.time("time_block", || {
             t.num += 2;
         });
@@ -614,8 +609,6 @@ mod test {
         client.count("customers", 6.0);
 
         let response = server_recv(server);
-        assert_eq!(
-            "myapp.load:9|g\nmyapp.customers:7|c",
-            response);
+        assert_eq!("myapp.load:9|g\nmyapp.customers:7|c", response);
     }
 }
