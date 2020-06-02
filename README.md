@@ -10,7 +10,7 @@ Add the `statsd` package as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-statsd = "^0.9.0"
+statsd = "^0.13.1"
 ```
 
 You need rustc >= 1.8.0 for statsd to work.
