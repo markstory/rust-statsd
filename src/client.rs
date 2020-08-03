@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
+use std::error;
 use std::io::Error;
 use std::net::AddrParseError;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
@@ -33,6 +34,8 @@ impl fmt::Display for StatsdError {
         }
     }
 }
+
+impl error::Error for StatsdError {}
 
 /// Client socket for statsd servers.
 ///
