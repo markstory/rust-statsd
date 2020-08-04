@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use std::fmt;
 use std::error;
+use std::fmt;
 use std::io::Error;
 use std::net::AddrParseError;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
