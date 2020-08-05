@@ -45,6 +45,9 @@ client.gauge("some.value", 12.0);
 
 // Modify a counter by an arbitrary float.
 client.count("some.counter", 511.0);
+
+// Send a histogram value as a float.
+client.histogram("some.histogram", 511.0);
 ```
 
 ### Tracking Timers
@@ -79,6 +82,9 @@ pipe.gauge("some.value", 12.0);
 
 // Modify a counter by an arbitrary float.
 pipe.count("some.counter", 511.0);
+
+// Send a histogram value as a float.
+pipe.histogram("some.histogram", 511.0);
 
 // Set max UDP packet size if you wish, default is 512
 pipe.set_max_udp_size(128);
