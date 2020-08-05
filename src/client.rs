@@ -35,14 +35,7 @@ impl fmt::Display for StatsdError {
     }
 }
 
-impl error::Error for StatsdError {
-    fn description(&self) -> &str {
-        match *self {
-            StatsdError::IoError(ref e) => e.description(),
-            StatsdError::AddrParseError(ref e) => e,
-        }
-    }
-}
+impl error::Error for StatsdError {}
 
 /// Client socket for statsd servers.
 ///
@@ -217,6 +210,17 @@ impl Client {
     pub fn pipeline(&self) -> Pipeline {
         Pipeline::new()
     }
+
+    /// Send a histogram value.
+    ///
+    /// ```ignore
+    /// // pass response size value
+    /// client.histogram("response.size", 128.0);
+    /// ```
+    pub fn histogram(&self, metric: &str, value: f64) {
+        let data = self.prepare(format!("{}:{}|h", metric, value));
+        self.send(data);
+    }
 }
 
 pub struct Pipeline {
@@ -365,6 +369,20 @@ impl Pipeline {
         callable();
         let used = start.elapsed();
         let data = format!("{}:{}|ms", metric, used.as_millis());
+        self.stats.push_back(data);
+    }
+
+    /// Send a histogram value.
+    ///
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // pass response size value
+    /// pipe.histogram("response.size", 128.0);
+    /// ```
+    pub fn histogram(&mut self, metric: &str, value: f64) {
+        let data = format!("{}:{}|h", metric, value);
         self.stats.push_back(data);
     }
 
@@ -530,6 +548,18 @@ mod test {
     }
 
     #[test]
+    fn test_sending_histogram() {
+        let host = next_test_ip4();
+        let server = make_server(&host);
+        let client = Client::new(&host, "myapp").unwrap();
+
+        client.histogram("metric", 9.1);
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:9.1|h", response);
+    }
+
+    #[test]
     fn test_pipeline_sending_time_block() {
         let host = next_test_ip4();
         let server = make_server(&host);
@@ -562,6 +592,19 @@ mod test {
 
         let response = server_recv(server);
         assert_eq!("myapp.metric:9.1|g", response);
+    }
+
+    #[test]
+    fn test_pipeline_sending_histogram() {
+        let host = next_test_ip4();
+        let server = make_server(&host);
+        let client = Client::new(&host, "myapp").unwrap();
+        let mut pipeline = client.pipeline();
+        pipeline.histogram("metric", 9.1);
+        pipeline.send(&client);
+
+        let response = server_recv(server);
+        assert_eq!("myapp.metric:9.1|h", response);
     }
 
     #[test]
