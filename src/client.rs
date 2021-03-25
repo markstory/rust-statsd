@@ -134,7 +134,7 @@ impl Client {
         if rand::random::<f64>() < rate {
             return;
         }
-        let data = self.prepare(format!("{}:{}|c", metric, value));
+        let data = self.prepare(format!("{}:{}|c|@{}", metric, value, rate));
         self.send(data);
     }
 
@@ -313,7 +313,7 @@ impl Pipeline {
         if rand::random::<f64>() < rate {
             return;
         }
-        let data = format!("{}:{}|c", metric, value);
+        let data = format!("{}:{}|c|@{}", metric, value, rate);
         self.stats.push_back(data);
     }
 
