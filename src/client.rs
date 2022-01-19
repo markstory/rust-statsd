@@ -6,8 +6,6 @@ use std::net::AddrParseError;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::time;
 
-extern crate rand;
-
 #[derive(Debug)]
 pub enum StatsdError {
     IoError(Error),
@@ -409,249 +407,252 @@ impl Pipeline {
     }
 }
 
+impl Default for Pipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    extern crate rand;
-    use self::rand::distributions::{IndependentSample, Range};
     use super::*;
-    use std::net::UdpSocket;
-    use std::str;
-    use std::sync::mpsc::sync_channel;
+
+    use std::net::{SocketAddr, UdpSocket};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::channel,
+        Arc,
+    };
     use std::thread;
+    use std::time::Duration;
 
-    static PORT: u16 = 8125;
-
-    // Generates random ports.
-    // Having random ports helps tests not collide over
-    // shared ports.
-    fn next_test_ip4() -> String {
-        let range = Range::new(0, 1000);
-        let mut rng = rand::thread_rng();
-        let port = PORT + range.ind_sample(&mut rng);
-        format!("127.0.0.1:{}", port)
+    struct Server {
+        local_addr: SocketAddr,
+        sock: UdpSocket,
     }
 
-    // Makes a udpsocket that acts as a statsd server.
-    fn make_server(host: &str) -> UdpSocket {
-        UdpSocket::bind(host).ok().unwrap()
-    }
+    impl Server {
+        fn new() -> Self {
+            let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+            let sock = UdpSocket::bind(addr).unwrap();
+            sock.set_read_timeout(Some(Duration::from_millis(100)))
+                .unwrap();
+            let local_addr = sock.local_addr().unwrap();
+            Server { local_addr, sock }
+        }
 
-    fn server_recv(server: UdpSocket) -> String {
-        let (serv_tx, serv_rx) = sync_channel(1);
-        let _t = thread::spawn(move || {
-            let mut buf = [0; 128];
-            let (len, _) = match server.recv_from(&mut buf) {
-                Ok(r) => r,
-                Err(_) => panic!("No response from test server."),
-            };
-            drop(server);
-            let bytes = Vec::from(&buf[0..len]);
-            serv_tx.send(bytes).unwrap();
-        });
+        fn addr(&self) -> SocketAddr {
+            self.local_addr.clone()
+        }
 
-        let bytes = serv_rx.recv().ok().unwrap();
-        str::from_utf8(&bytes).unwrap().to_string()
+        /// Run the given test function while receiving several packets. Return a vector of the
+        /// packets.
+        fn run_while_receiving_all<F>(self, func: F) -> Vec<String>
+        where
+            F: Fn(),
+        {
+            let (serv_tx, serv_rx) = channel();
+            let func_ran = Arc::new(AtomicBool::new(false));
+            let bg_func_ran = Arc::clone(&func_ran);
+            let bg = thread::spawn(move || loop {
+                let mut buf = [0; 1500];
+                if let Ok((len, _)) = self.sock.recv_from(&mut buf) {
+                    let bytes = Vec::from(&buf[0..len]);
+                    serv_tx.send(bytes).unwrap();
+                }
+                // go through the loop least once (do...while)
+                if bg_func_ran.load(Ordering::SeqCst) {
+                    break;
+                }
+            });
+            func();
+            std::thread::sleep(Duration::from_millis(200));
+            func_ran.store(true, Ordering::SeqCst);
+            bg.join().expect("background thread should join");
+            serv_rx
+                .into_iter()
+                .map(|bytes| String::from_utf8(bytes).unwrap())
+                .collect()
+        }
+
+        /// Run the given test function while receiving several packets. Return the concatenation
+        /// of the packets.
+        fn run_while_receiving<F>(self, func: F) -> String
+        where
+            F: Fn(),
+        {
+            itertools::Itertools::intersperse(
+                self.run_while_receiving_all(func).into_iter(),
+                String::from("\n"),
+            )
+            .fold(String::new(), |acc, b| acc + &b)
+        }
     }
 
     #[test]
     fn test_sending_gauge() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-
-        client.gauge("metric", 9.1);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.gauge("metric", 9.1));
         assert_eq!("myapp.metric:9.1|g", response);
     }
 
     #[test]
     fn test_sending_gauge_without_prefix() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "").unwrap();
-
-        client.gauge("metric", 9.1);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "").unwrap();
+        let response = server.run_while_receiving(|| client.gauge("metric", 9.1));
         assert_eq!("metric:9.1|g", response);
     }
 
     #[test]
     fn test_sending_incr() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-
-        client.incr("metric");
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.incr("metric"));
         assert_eq!("myapp.metric:1|c", response);
     }
 
     #[test]
     fn test_sending_decr() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-
-        client.decr("metric");
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.decr("metric"));
         assert_eq!("myapp.metric:-1|c", response);
     }
 
     #[test]
     fn test_sending_count() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-
-        client.count("metric", 12.2);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.count("metric", 12.2));
         assert_eq!("myapp.metric:12.2|c", response);
     }
 
     #[test]
     fn test_sending_timer() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-
-        client.timer("metric", 21.39);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.timer("metric", 21.39));
         assert_eq!("myapp.metric:21.39|ms", response);
+    }
+
+    struct TimeTest {
+        num: u8,
     }
 
     #[test]
     fn test_sending_timed_block() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        struct TimeTest {
-            num: u8,
-        };
-
-        let mut t = TimeTest { num: 10 };
-        let output = client.time("time_block", || {
-            t.num += 2;
-            "a string"
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| {
+            let mut t = TimeTest { num: 10 };
+            let output = client.time("time_block", || {
+                t.num += 2;
+                "a string"
+            });
+            assert_eq!(output, "a string");
+            assert_eq!(t.num, 12);
         });
-
-        let response = server_recv(server);
-        assert_eq!(output, "a string");
-        assert_eq!(t.num, 12);
         assert!(response.contains("myapp.time_block"));
         assert!(response.contains("|ms"));
     }
 
     #[test]
     fn test_sending_histogram() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-
-        client.histogram("metric", 9.1);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.histogram("metric", 9.1));
         assert_eq!("myapp.metric:9.1|h", response);
     }
 
     #[test]
     fn test_pipeline_sending_time_block() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        let mut pipeline = client.pipeline();
-        pipeline.gauge("metric", 9.1);
-        struct TimeTest {
-            num: u8,
-        };
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.gauge("metric", 9.1);
 
-        let mut t = TimeTest { num: 10 };
-        pipeline.time("time_block", || {
-            t.num += 2;
+            let mut t = TimeTest { num: 10 };
+            pipeline.time("time_block", || {
+                t.num += 2;
+            });
+            pipeline.send(&client);
+            assert_eq!(t.num, 12);
         });
-        pipeline.send(&client);
-
-        let response = server_recv(server);
-        assert_eq!(t.num, 12);
         assert_eq!("myapp.metric:9.1|g\nmyapp.time_block:0|ms", response);
     }
 
     #[test]
     fn test_pipeline_sending_gauge() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        let mut pipeline = client.pipeline();
-        pipeline.gauge("metric", 9.1);
-        pipeline.send(&client);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.gauge("metric", 9.1);
+            pipeline.send(&client);
+        });
         assert_eq!("myapp.metric:9.1|g", response);
     }
 
     #[test]
     fn test_pipeline_sending_histogram() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        let mut pipeline = client.pipeline();
-        pipeline.histogram("metric", 9.1);
-        pipeline.send(&client);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.histogram("metric", 9.1);
+            pipeline.send(&client);
+        });
         assert_eq!("myapp.metric:9.1|h", response);
     }
 
     #[test]
     fn test_pipeline_sending_multiple_data() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        let mut pipeline = client.pipeline();
-        pipeline.gauge("metric", 9.1);
-        pipeline.count("metric", 12.2);
-        pipeline.send(&client);
-
-        let response = server_recv(server);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.gauge("metric", 9.1);
+            pipeline.count("metric", 12.2);
+            pipeline.send(&client);
+        });
         assert_eq!("myapp.metric:9.1|g\nmyapp.metric:12.2|c", response);
     }
 
     #[test]
     fn test_pipeline_set_max_udp_size() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        let mut pipeline = client.pipeline();
-        pipeline.set_max_udp_size(20);
-        pipeline.gauge("metric", 9.1);
-        pipeline.count("metric", 12.2);
-        pipeline.send(&client);
-
-        let response = server_recv(server);
-        assert_eq!("myapp.metric:9.1|g", response);
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving_all(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.set_max_udp_size(20);
+            pipeline.gauge("metric", 9.1);
+            pipeline.count("metric", 12.2);
+            pipeline.send(&client);
+        });
+        assert_eq!(vec!["myapp.metric:9.1|g", "myapp.metric:12.2|c"], response);
     }
 
     #[test]
     fn test_pipeline_send_metric_after_pipeline() {
-        let host = next_test_ip4();
-        let server = make_server(&host);
-        let client = Client::new(&host, "myapp").unwrap();
-        let mut pipeline = client.pipeline();
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving_all(|| {
+            let mut pipeline = client.pipeline();
 
-        pipeline.gauge("load", 9.0);
-        pipeline.count("customers", 7.0);
-        pipeline.send(&client);
+            pipeline.gauge("load", 9.0);
+            pipeline.count("customers", 7.0);
+            pipeline.send(&client);
 
-        // Should still be able to send metrics
-        // with the client.
-        client.count("customers", 6.0);
-
-        let response = server_recv(server);
-        assert_eq!("myapp.load:9|g\nmyapp.customers:7|c", response);
+            // Should still be able to send metrics
+            // with the client.
+            client.count("customers", 6.0);
+        });
+        assert_eq!(
+            vec!["myapp.load:9|g\nmyapp.customers:7|c", "myapp.customers:6|c"],
+            response
+        );
     }
 }
