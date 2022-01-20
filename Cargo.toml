@@ -12,6 +12,10 @@ include = [
     "README.md",
     "LICENSE.txt",
 ]
+edition = "2018"
 
 [dependencies]
-rand = "^0.3"
+rand = "0.8"
+
+[dev-dependencies]
+itertools = "0.10"

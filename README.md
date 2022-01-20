@@ -13,7 +13,7 @@ Add the `statsd` package as a dependency in your `Cargo.toml` file:
 statsd = "^0.13.1"
 ```
 
-You need rustc >= 1.8.0 for statsd to work.
+You need rustc >= 1.31.0 for statsd to work.
 
 You can then get a client instance and start tracking metrics:
 
