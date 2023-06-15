@@ -219,6 +219,16 @@ impl Client {
         let data = self.prepare(format!("{}:{}|h", metric, value));
         self.send(data);
     }
+
+    /// Send a key/value
+    ///
+    /// ```ignore
+    /// client.kv("key", 1.);
+    /// ```
+    pub fn kv(&self, metric: &str, value: f64) {
+        let data = self.prepare(format!("{}:{}|kv", metric, value));
+        self.send(data);
+    }
 }
 
 pub struct Pipeline {
@@ -381,6 +391,20 @@ impl Pipeline {
     /// ```
     pub fn histogram(&mut self, metric: &str, value: f64) {
         let data = format!("{}:{}|h", metric, value);
+        self.stats.push_back(data);
+    }
+
+    /// Send a key/value.
+    ///
+    /// ```
+    /// use statsd::client::Pipeline;
+    ///
+    /// let mut pipe = Pipeline::new();
+    /// // pass response size value
+    /// pipe.kv("response.size", 256.);
+    /// ```
+    pub fn kv(&mut self, metric: &str, value: f64) {
+        let data = format!("{}:{}|kv", metric, value);
         self.stats.push_back(data);
     }
 
@@ -567,6 +591,14 @@ mod test {
     }
 
     #[test]
+    fn test_sending_kv() {
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| client.kv("metric", 15.26));
+        assert_eq!("myapp.metric:15.26|kv", response);
+    }
+
+    #[test]
     fn test_pipeline_sending_time_block() {
         let server = Server::new();
         let client = Client::new(server.addr(), "myapp").unwrap();
@@ -606,6 +638,18 @@ mod test {
             pipeline.send(&client);
         });
         assert_eq!("myapp.metric:9.1|h", response);
+    }
+
+    #[test]
+    fn test_pipeline_sending_kv() {
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.kv("metric", 15.26);
+            pipeline.send(&client);
+        });
+        assert_eq!("myapp.metric:15.26|kv", response);
     }
 
     #[test]

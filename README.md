@@ -10,7 +10,7 @@ Add the `statsd` package as a dependency in your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-statsd = "^0.13.1"
+statsd = "^0.16"
 ```
 
 You need rustc >= 1.31.0 for statsd to work.
@@ -48,6 +48,9 @@ client.count("some.counter", 511.0);
 
 // Send a histogram value as a float.
 client.histogram("some.histogram", 511.0);
+
+// Send a key/value.
+client.kv("some.data", 15.26);
 ```
 
 ### Tracking Timers
@@ -85,6 +88,9 @@ pipe.count("some.counter", 511.0);
 
 // Send a histogram value as a float.
 pipe.histogram("some.histogram", 511.0);
+
+// Send a key/value.
+pipe.kv("some.data", 15.26);
 
 // Set max UDP packet size if you wish, default is 512
 pipe.set_max_udp_size(128);
