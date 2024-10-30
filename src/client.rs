@@ -690,7 +690,10 @@ mod test {
             pipeline.count("metric_letters", 12.2);
             pipeline.send(&client);
         });
-        assert_eq!(vec!["myapp.metric_gauge:9.1|g", "myapp.metric_letters:12.2|c"], response);
+        assert_eq!(
+            vec!["myapp.metric_gauge:9.1|g", "myapp.metric_letters:12.2|c"],
+            response
+        );
     }
 
     #[test]
