@@ -466,7 +466,7 @@ mod test {
         }
 
         fn addr(&self) -> SocketAddr {
-            self.local_addr.clone()
+            self.local_addr
         }
 
         /// Run the given test function while receiving several packets. Return a vector of the
