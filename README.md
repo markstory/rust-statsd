@@ -1,6 +1,6 @@
 # Rust Statsd
 
-[![Build Status](https://secure.travis-ci.org/markstory/rust-statsd.png?branch=master)](http://travis-ci.org/markstory/rust-statsd)
+[![CI status](https://github.com/markstory/rust-statsd/actions/workflows/ci.yml/badge.svg)](https://github.com/markstory/rust-statsd/actions/workflows/ci.yml)
 
 A StatsD client implementation of statsd in rust.
 
