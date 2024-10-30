@@ -42,7 +42,7 @@ impl error::Error for StatsdError {}
 ///
 /// # Example
 ///
-/// Creating a client and sending metrics is easy.
+/// Creating a client and sending metrics can be done with:
 ///
 /// ```ignore
 /// use statsd::client::Client;
@@ -415,7 +415,7 @@ impl Pipeline {
             _data += client.prepare(&data).as_ref();
             while !self.stats.is_empty() {
                 let stat = client.prepare(self.stats.pop_front().unwrap());
-                if data.len() + stat.len() + 1 > self.max_udp_size {
+                if _data.len() + stat.len() + 1 > self.max_udp_size {
                     client.send(_data.clone());
                     _data.clear();
                     _data += &stat;
@@ -677,6 +677,20 @@ mod test {
             pipeline.send(&client);
         });
         assert_eq!(vec!["myapp.metric:9.1|g", "myapp.metric:12.2|c"], response);
+    }
+
+    #[test]
+    fn test_pipeline_set_max_udp_size_chunk() {
+        let server = Server::new();
+        let client = Client::new(server.addr(), "myapp").unwrap();
+        let response = server.run_while_receiving_all(|| {
+            let mut pipeline = client.pipeline();
+            pipeline.set_max_udp_size(5);
+            pipeline.gauge("metric_gauge", 9.1);
+            pipeline.count("metric_letters", 12.2);
+            pipeline.send(&client);
+        });
+        assert_eq!(vec!["myapp.metric_gauge:9.1|g", "myapp.metric_letters:12.2|c"], response);
     }
 
     #[test]
